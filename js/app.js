@@ -1,15 +1,16 @@
 import * as store from './store.js';
 import { SEED_IDEAS, TAG_GROUPS } from './seed.js';
+import { createTonight } from './tonight.js';
 import {
   SEASONS, seasonOf, todayISO, nextWeekday, prettyDate, fetchWeather, badOutdoorDay, describeCode,
   costLabel, driveLabel, DEFAULT_FILTERS, activeFilterCount, applyFilters, buildHistory, scoreIdea,
-  weightedPick, weightedSample, RATING_PARAMS, compareRatings, inSeason,
+  weightedPick, weightedSample, RATING_PARAMS, compareRatings, inSeason, wearTips,
 } from './logic.js';
 
 // ---------- state ----------
 
 const state = {
-  tab: localStorage.getItem('dn.tab') || 'ideas',
+  tab: localStorage.getItem('dn.tab') || 'tonight',
   filters: { ...DEFAULT_FILTERS, ...JSON.parse(localStorage.getItem('dn.filters') || '{}') },
   filtersOpen: false,
   sort: 'best',
@@ -85,6 +86,7 @@ function render() {
     <main class="main">${VIEWS[state.tab]()}</main>
     ${viewTabs()}`;
   if (state.tab === 'spin') drawWheel();
+  if (state.tab === 'tonight') { tonight.after(); tonight.markSeen(); }
 }
 
 function renderModal() {
@@ -154,11 +156,11 @@ function viewInstallBanner() {
 }
 
 function viewTabs() {
-  const tabs = [['ideas', '💡', 'Ideas'], ['spin', '🎡', 'Spin'], ['decide', '⚖️', 'Decide'], ['dates', '💞', 'Our dates']];
+  const tabs = [['tonight', '🌙', 'Tonight'], ['ideas', '💡', 'Ideas'], ['spin', '🎡', 'Spin'], ['decide', '⚖️', 'Decide'], ['dates', '💞', 'Our dates']];
   const needs = needsMyRating().length + readyToReveal().length;
   return `<nav class="tabs">${tabs.map(([k, i, l]) => `
     <button class="tab ${state.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">
-      <span class="tab-i">${i}${k === 'dates' && needs ? `<b class="badge">${needs}</b>` : ''}</span><span>${l}</span>
+      <span class="tab-i">${i}${k === 'dates' && needs ? `<b class="badge">${needs}</b>` : ''}${k === 'tonight' && tonight.badge() ? '<b class="badge">!</b>' : ''}</span><span>${l}</span>
     </button>`).join('')}</nav>`;
 }
 
@@ -520,7 +522,15 @@ function viewInsights(done) {
   ${best || topTag ? `<p class="muted small center">${best ? `🏆 Best so far: <b>${esc(best.d.data.title)}</b>. ` : ''}${topTag ? `You rate ${esc(tagLabel(topTag[0]))} dates highest.` : ''}</p>` : ''}`;
 }
 
-const VIEWS = { ideas: viewIdeas, spin: viewSpin, decide: viewDecide, dates: viewDates };
+const tonight = createTonight({
+  ctx: () => ctx(),
+  partnerName: () => partnerName(),
+  render: () => render(),
+  toast: (m) => toast(m),
+  goDecide: (a, b) => { state.decide = { ...state.decide, a, b, result: null }; state.tab = 'decide'; render(); window.scrollTo(0, 0); },
+});
+
+const VIEWS = { tonight: () => tonight.view(), ideas: viewIdeas, spin: viewSpin, decide: viewDecide, dates: viewDates };
 
 // ---------- Setup ----------
 
@@ -765,7 +775,11 @@ MODALS.date = () => {
       ${wx ? `<p>${wx.emoji} Forecast: ${wx.label}, ${wx.hi}°/${wx.lo}°${wx.pop ? `, ${wx.pop}% chance of rain` : ''}. Sunset ${wx.sunset}.</p>` : ''}
       ${wx && badOutdoorDay(wx) && ctx().ideasById[x.ideaId]?.tags?.includes('outdoors') ? `<p class="note">Weather looks rough for an outdoor date. Maybe have a backup?</p>` : ''}
       ${x.notes ? `<p>📝 ${esc(x.notes)}</p>` : ''}
-      <div class="col"><button class="btn" data-act="logDate" data-id="${d.id}">We went! How did it go?</button>
+      ${wearBlock(ctx().ideasById[x.ideaId], wx, x.time)}
+      <div class="col">
+      <a class="btn ghost center" href="${esc(gcalLink(d))}" target="_blank" rel="noopener">📅 Add to Google Calendar${partnerEmail() ? ` (invites ${esc(partnerName())})` : ''}</a>
+      ${partnerEmail() ? '' : `<p class="muted small">Tip: once ${esc(partnerName())} adds their email in ⚙️ Settings, the calendar invite will include them automatically.</p>`}
+      <button class="btn" data-act="logDate" data-id="${d.id}">We went! How did it go?</button>
       <button class="btn ghost" data-act="editPlan" data-id="${d.id}">Change plan</button>
       <button class="link danger" data-act="deleteDate" data-id="${d.id}">Cancel this date</button></div>`;
   } else {
@@ -978,6 +992,57 @@ function followUps(d, cmp) {
   </section>`;
 }
 
+function wearBlock(idea, day, time) {
+  const tips = wearTips(idea, day, time);
+  if (!tips.length) return '';
+  return `<div class="wear-box"><b>What to wear & bring</b><div class="wear">${tips.map(([e, t]) => `<span>${e} ${esc(t)}</span>`).join('')}</div></div>`;
+}
+
+function partnerEmail() {
+  return (couple().emails || {})[partnerName()] || '';
+}
+
+function saveEmail(form) {
+  const email = form.email.value.trim();
+  const c = store.get('couple')?.data || couple();
+  store.put('couple', 'couple', { ...c, emails: { ...(c.emails || {}), [store.me.name]: email } });
+  toast(email ? 'Email saved' : 'Email removed');
+  renderModal();
+}
+
+// Opens Google Calendar with everything filled in. Nothing is sent until you tap Save there.
+function gcalLink(d) {
+  const x = d.data;
+  const c = ctx();
+  const idea = c.ideasById[x.ideaId];
+  const [y, m, dd] = (x.when || todayISO()).split('-').map(Number);
+  const [hh, mm] = (x.time || '18:00').split(':').map(Number);
+  const start = new Date(y, m - 1, dd, hh, mm);
+  const hours = idea?.tags?.includes('day-trip') ? 6 : idea?.special ? 4 : 3;
+  const end = new Date(start.getTime() + hours * 3600000);
+  const pad = (n) => String(n).padStart(2, '0');
+  const fmt = (t) => `${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}T${pad(t.getHours())}${pad(t.getMinutes())}00`;
+  const day = state.weather?.days?.[x.when];
+  const lines = [
+    '💕 Date night!',
+    idea ? `💲 About ${costLabel(idea)} · 🚗 ${driveLabel(idea)}` : '',
+    day ? `${day.emoji} Forecast: ${day.label}, ${day.hi}°/${day.lo}°${day.pop ? `, ${day.pop}% rain` : ''}` : '',
+    x.notes ? `📝 ${x.notes}` : '',
+    ...wearTips(idea, day, x.time).map(([e, t]) => `${e} ${t}`),
+    '',
+    'Planned with Date Night',
+  ].filter((l, i, a) => l || (i && a[i - 1]));
+  const p = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `Date night: ${x.title}`,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details: lines.join('\n'),
+    ctz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+  if (partnerEmail()) p.set('add', partnerEmail());
+  return `https://calendar.google.com/calendar/render?${p}`;
+}
+
 MODALS.settings = () => {
   const c = couple();
   const s = store.status;
@@ -987,6 +1052,12 @@ MODALS.settings = () => {
     <button class="btn" data-act="openInvite">Invite ${esc(partnerName())} 💌</button>
     <button class="btn ghost" data-act="openInstall">Add to home screen 📲</button>
   </div>
+  <h3>Your email (for calendar invites)</h3>
+  <form data-form="saveEmail" class="row">
+    <input type="email" name="email" placeholder="you@example.com" value="${esc((c.emails || {})[store.me.name] || '')}" style="flex:1">
+    <button class="btn small">Save</button>
+  </form>
+  <p class="muted small">${partnerEmail() ? `✅ ${esc(partnerName())}'s email is set, so invites will include them.` : `${esc(partnerName())} hasn't added an email yet.`} Emails are stored privately in your account.</p>
   <h3>Sync</h3>
   ${store.remoteEnabled()
     ? `<p class="small">${s.error ? `⚠️ ${esc(s.error)}` : s.lastSync ? `✅ Last synced ${s.lastSync.toLocaleTimeString()}` : 'Not synced yet'}</p>
@@ -1047,7 +1118,7 @@ const ACTIONS = {
   editIdea: (el) => openModal('idea', { id: el.dataset.id }),
   newIdea: () => openModal('idea', { id: null }),
   hideIdea: (el) => { const it = store.get(el.dataset.id); store.put('idea', it.id, { ...it.data, hidden: true }); closeModal(); toast('Removed'); },
-  planIdea: (el) => openModal('plan', { ideaId: el.dataset.id }),
+  planIdea: (el) => openModal('plan', { ideaId: el.dataset.id, when: el.dataset.when }),
   logUnplanned: () => openModal('plan', { past: true, when: todayISO() }),
   editPlan: (el) => openModal('plan', { dateId: el.dataset.id }),
   openDate: (el) => openModal('date', { id: el.dataset.id }),
@@ -1137,7 +1208,9 @@ document.addEventListener('input', (e) => {
   }
 });
 
-const FORMS = { startCouple, joinCode, saveIdea, savePlan, saveLog, saveRating };
+Object.assign(ACTIONS, tonight.actions);
+
+const FORMS = { startCouple, joinCode, saveIdea, savePlan, saveLog, saveRating, saveEmail };
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-form]');
   if (!f) return;

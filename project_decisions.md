@@ -12,3 +12,5 @@ Each decision: what we chose, and why. Newest at the bottom.
 8. **Ideas use drive time, not GPS distance.** Avoids needing addresses for every idea in v1.
 9. **Personal data stays out of the code.** Real ideas, names, and home location live only in the database, so the code can be public.
 10. **Weather location comes from the phone.** No default town in the code; each couple taps "Use my location" once.
+11. **Swipe one card at a time for Tonight.** Less decision fatigue than a long list. Chips that changed from the last card are highlighted.
+12. **Calendar via Google's prefilled link, not the Calendar API.** Free, no sign-in setup, and the user always taps Save themselves.

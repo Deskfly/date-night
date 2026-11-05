@@ -1,8 +1,8 @@
 // Offline support. Bump VERSION whenever app files change so phones get the update.
-const VERSION = 'dn-v1';
+const VERSION = 'dn-v2';
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
-  'js/app.js', 'js/store.js', 'js/logic.js', 'js/seed.js', 'js/config.js',
+  'js/app.js', 'js/tonight.js', 'js/store.js', 'js/logic.js', 'js/seed.js', 'js/config.js',
   'icons/icon-192.png', 'icons/apple-touch-icon.png',
 ];
 

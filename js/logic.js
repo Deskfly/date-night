@@ -293,3 +293,122 @@ export function compareRatings(a, b) {
   else againLine = 'Maybe again, with some changes.';
   return { rows, sync, overall, biggest: biggest && Math.abs(biggest.a - biggest.b) >= 2 ? biggest : null, verdict, syncLine, againLine };
 }
+
+// ---- What to wear / bring ----
+
+export function wearTips(idea, day, time = '17:30') {
+  const tips = [];
+  const tags = idea?.tags || [];
+  const outside = tags.includes('outdoors') || tags.includes('walk') || tags.includes('picnic');
+  if (day) {
+    const t = day.hi;
+    if (t < 35) tips.push(['🧤', 'Heavy coat, hat, and gloves']);
+    else if (t < 50) tips.push(['🧥', 'Warm jacket']);
+    else if (t < 65) tips.push(['🧶', 'Bring a light layer']);
+    else if (t > 85) tips.push(['🩳', 'Light clothes and water']);
+    if (day.pop >= 40 || ['Rain', 'Drizzle', 'Storms'].includes(day.label)) tips.push(['☔', `Umbrella or rain jacket (${day.pop}% chance)`]);
+    if (day.label === 'Snow') tips.push(['🥾', 'Boots for snow']);
+    if (outside && day.sunset && time && time >= `${day.sunset}`.slice(0, 5).replace(/^(\d):/, '0$1:')) tips.push(['🔦', `Dark by ${day.sunset}, bring a light`]);
+  }
+  if (tags.includes('walk')) tips.push(['👟', 'Comfy walking shoes']);
+  if (tags.includes('active')) tips.push(['🏃', 'Clothes you can move in']);
+  if (tags.includes('picnic')) tips.push(['🧺', 'Blanket and snacks']);
+  if (tags.includes('drive') || (idea?.drive || 0) >= 30) tips.push(['🎶', 'A playlist for the drive']);
+  if (idea?.special) tips.push(['✨', 'Dress up a little']);
+  return tips;
+}
+
+// ---- Tonight: combine two check-ins ----
+
+export const ENERGY = { 1: { emoji: '😴', label: 'Wiped' }, 2: { emoji: '🙂', label: 'Okay' }, 3: { emoji: '⚡', label: 'Excited' } };
+export const VIBES = [
+  ['cozy', '🛋️ Cozy'], ['hungry', '🍔 Hungry'], ['chatty', '💬 Want to talk'],
+  ['out', '🚪 Get out of the house'], ['active', '🏃 Move around'], ['romantic', '🌹 Romantic'],
+];
+export const TIME_OPTS = [[60, '⏱️ About an hour'], [180, '🕒 2–3 hours'], [600, '🌙 All evening+']];
+export const BUDGET_OPTS = [[15, '$ Cheap'], [35, '$$ Normal'], [60, '$$$ Treat'], [999, '💎 Splurge']];
+export const NOVELTY_OPTS = [['new', '✨ Something new'], ['fav', '🔁 An old favorite'], ['any', '🤷 Either']];
+
+const ENERGY_RANK = { Low: 1, Med: 2, High: 3 };
+
+export function combineCheckins(list) {
+  const cs = list.filter(Boolean);
+  if (!cs.length) return null;
+  return {
+    energy: Math.min(...cs.map((c) => c.energy || 2)),
+    time: Math.min(...cs.map((c) => c.time || 180)),
+    budget: Math.min(...cs.map((c) => c.budget || 35)),
+    vibes: [...new Set(cs.flatMap((c) => c.vibes || []))],
+    novelty: cs.every((c) => c.novelty === 'new') ? 'new' : cs.some((c) => c.novelty === 'fav') && !cs.some((c) => c.novelty === 'new') ? 'fav' : 'any',
+    bothNew: cs.length >= 2 && cs.every((c) => c.novelty === 'new'),
+  };
+}
+
+function fitsTime(idea, minutes) {
+  const tags = idea.tags || [];
+  const est = (idea.drive || 0) * 2 + (tags.includes('day-trip') ? 300 : idea.special ? 150 : tags.includes('at-home') ? 90 : 100);
+  return est <= minutes + 30;
+}
+
+const VIBE_TAGS = {
+  cozy: ['at-home', 'indoors', 'show', 'treats', 'drive'],
+  hungry: ['burgers', 'chinese', 'steak', 'greek', 'diner', 'cook-at-home'],
+  chatty: ['walk', 'diner', 'drive', 'picnic', 'cook-at-home'],
+  out: ['outdoors', 'walk', 'games', 'show', 'museum', 'day-trip', 'active'],
+  active: ['active', 'walk', 'games'],
+  romantic: ['picnic', 'steak', 'holiday', 'show', 'drive'],
+};
+
+// Ideas that fit tonight, best first. `c` is a ctx() from the app, `t` a combined check-in.
+export function tonightDeck(c, t, limit = 10) {
+  const out = [];
+  for (const idea of c.ideas) {
+    if (idea.hidden) continue;
+    if (!inSeason(idea, c.season)) continue;
+    if ((idea.cost?.[0] || 0) > t.budget) continue;
+    if (!fitsTime(idea, t.time)) continue;
+    if ((ENERGY_RANK[idea.energy] || 1) > t.energy) continue;
+    if (c.badWeather && isOutdoor(idea)) continue;
+    const tried = c.triedIds.has(idea.id);
+    if (t.novelty === 'new' && tried) continue;
+    let { score, why } = scoreIdea(idea, c);
+    const vibeHits = t.vibes.filter((v) => VIBE_TAGS[v]?.some((tag) => idea.tags?.includes(tag)));
+    score *= 1 + 0.35 * vibeHits.length;
+    if (t.novelty === 'fav' && tried) score *= (c.history.ideaAvg[idea.id] || 3) >= 4 ? 2 : 1.2;
+    out.push({ idea, score, why, vibeHits });
+  }
+  out.sort((a, b) => b.score - a.score);
+  // Keep the best, but shuffle a little so it isn't the same deck every night.
+  const top = out.slice(0, limit * 2);
+  return weightedSample(top, Math.min(limit, top.length), (x) => x.score);
+}
+
+export function ideaEmoji(idea) {
+  const t = idea.tags || [];
+  const map = [['holiday', '🎄'], ['picnic', '🧺'], ['burgers', '🍔'], ['chinese', '🥡'], ['steak', '🥩'], ['greek', '🥙'], ['diner', '🍳'],
+    ['cook-at-home', '👩‍🍳'], ['show', '🎬'], ['games', '🎳'], ['museum', '🖼️'], ['day-trip', '🗺️'], ['active', '⛸️'], ['walk', '🌳'], ['treats', '🍦'], ['drive', '🚗'], ['at-home', '🛋️']];
+  for (const [k, e] of map) if (t.includes(k)) return e;
+  return '💕';
+}
+
+export function moodLine(checkins) {
+  const [a, b] = checkins;
+  if (!a || !b) return '';
+  const ea = a.energy || 2;
+  const eb = b.energy || 2;
+  if (ea === 1 && eb === 1) return "You're both wiped. Keep it easy tonight. 🛋️";
+  if (ea === 3 && eb === 3) return "You're both fired up. Make it count! ⚡";
+  if (Math.abs(ea - eb) >= 2) {
+    const tired = ea < eb ? a.by : b.by;
+    const up = ea < eb ? b.by : a.by;
+    return `${tired} is wiped and ${up} is excited, so these are low-effort but still feel like a date.`;
+  }
+  return 'You two are in a similar place tonight. 👌';
+}
+
+export function weatherHint(day) {
+  if (!day) return '';
+  if (badOutdoorDay(day)) return ' · rough weather';
+  if (day.hi >= 60 && day.hi <= 85) return ' · nice out';
+  return ` · ${day.hi}°`;
+}

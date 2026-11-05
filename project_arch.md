@@ -14,6 +14,7 @@ Every record in `items` has `couple`, `id`, `kind`, `data` (JSON), `deleted`, `u
 | couple | `couple` | names, home location |
 | idea | `s01`… or `i_…` | title, cost range, drive minutes, seasons, energy, whose favorite, tags, fav/tried/hidden |
 | date | `d_…` | idea, day, time, notes, status (planned/done), log (start, end, length, spent, weather, season, what happened), who has seen the reveal |
+| checkin | `c_<YYYY-MM-DD>_<name>` | tonight's energy, time, budget, vibes, new-vs-favorite, swipe deck, likes/passes, second-look deck, done |
 | rating | `r_<dateId>_<name>` | 5 scores (overall, fun, food, connection, value), do-again, best part, what to change |
 
 ## Sync
@@ -24,3 +25,12 @@ Every record in `items` has `couple`, `id`, `kind`, `data` (JSON), `deleted`, `u
 
 ## "Smart" picks (`js/logic.js` → `scoreIdea`)
 Ideas get a weight from: in-season boost, bad weather penalty for outdoor ideas, how you rated similar dates, whether you just did it, whether it's new, a favorite, and taking turns between whose favorite it is. The wheel and "Best bet" use this weight.
+
+## Tonight tab (`js/tonight.js`)
+1. Each partner checks in privately (one question per screen).
+2. A swipe deck of up to 10 ideas that fit both check-ins (lowest energy, time, and budget win). If the partner already swiped, their yeses that fit are added so matches are likely.
+3. 5 nos in a row offers "pick for me", "second look", or "change check-in". Zero yeses triggers a second look at up to 4 skipped ideas (partner's yeses first), each with a fresh angle.
+4. When both finish: matches (both yes), best fit first. Both chose "something new" → celebration screen first. No match → compromise via the Decide tab.
+
+## Calendar
+"Add to Google Calendar" opens Google Calendar's own prefilled event page (title, time, details, partner's email as guest). Nothing is sent until the user taps Save there. Emails live in the private `couple` record.

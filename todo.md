@@ -1,7 +1,6 @@
 # To do
 
 ## Now
-- [ ] Turn on GitHub Pages (Settings → Pages → main / root)
 - [ ] Install on both phones and do a test rating
 
 ## Later
