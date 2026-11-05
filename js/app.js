@@ -1,6 +1,7 @@
 import * as store from './store.js';
 import { SEED_IDEAS, TAG_GROUPS } from './seed.js';
 import { createTonight } from './tonight.js';
+import { Q_CATS, QUESTIONS, catInfo, nextQuestion } from './questions.js';
 import {
   SEASONS, seasonOf, todayISO, nextWeekday, prettyDate, fetchWeather, badOutdoorDay, describeCode,
   costLabel, driveLabel, DEFAULT_FILTERS, activeFilterCount, applyFilters, buildHistory, scoreIdea,
@@ -138,6 +139,7 @@ function viewHeader() {
     <div class="brand">Date Night <span class="heart">♥</span></div>
     <div class="top-right">
       ${wx ? `<span class="pill" title="Weather">${wx.emoji} ${wx.temp}°</span>` : ''}
+      <button class="icon-btn" data-act="openTalk" aria-label="Conversation questions">${icon('talk', 'ico gear')}</button>
       <button class="icon-btn" data-act="openSettings" aria-label="Settings"><span class="dot ${dot}" title="${dotTitle}"></span>${icon('gear', 'ico gear')}</button>
     </div>
   </header>`;
@@ -162,6 +164,7 @@ const ICONS = {
   plans: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="15" r="1.4" fill="currentColor" stroke="none"/>',
   memories: '<rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M12 16.5s-3.5-2.1-3.5-4.7A1.9 1.9 0 0 1 12 10.6a1.9 1.9 0 0 1 3.5 1.2c0 2.6-3.5 4.7-3.5 4.7z"/><path d="M8 7h8"/>',
   ideas: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  talk: '<path d="M20 12a7.5 7.5 0 0 1-11 6.6L4 20l1.4-4.6A7.5 7.5 0 1 1 20 12z"/><path d="M10.2 10.2a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4"/><circle cx="12" cy="15.6" r=".9" fill="currentColor" stroke="none"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
 };
 const icon = (k, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
@@ -588,6 +591,7 @@ function planCard(d) {
     ${tips.length ? `<div class="wear">${tips.map(([e, t]) => `<span>${e} ${esc(t)}</span>`).join('')}</div>` : ''}
     <div class="row">
       <a class="btn small ghost" href="${esc(gcalLink(d))}" target="_blank" rel="noopener">📅 Calendar</a>
+      ${isToday ? '<button class="btn small ghost" data-act="openTalk">💬 Drive questions</button>' : ''}
       ${x.when <= todayISO() ? `<button class="btn small" data-act="logDate" data-id="${d.id}">We went! 🎉</button>` : `<button class="btn small ghost" data-act="openDate" data-id="${d.id}">Details</button>`}
     </div>
   </article>`;
@@ -1173,6 +1177,59 @@ function findSearches() {
   ].map((x) => ({ ...x, q: x.q.replace(/\s+/g, ' ').trim() }));
 }
 
+// ---------- conversation questions ----------
+// "Seen" lives on this phone only; it just keeps the same questions from coming back too soon.
+function qSeen() {
+  try { return JSON.parse(localStorage.getItem('dn.qseen') || '[]'); } catch { return []; }
+}
+function qMarkSeen(id) {
+  const seen = qSeen().filter((x) => x !== id);
+  seen.push(id);
+  localStorage.setItem('dn.qseen', JSON.stringify(seen.slice(-QUESTIONS.length)));
+}
+function qAdvance() {
+  const m = state.modal;
+  const pool = QUESTIONS.filter((q) => m.cat === 'all' || q.cat === m.cat).map((q) => q.id);
+  let seen = qSeen().filter((id) => pool.includes(id));
+  const r = nextQuestion(m.cat, seen, m.hist[m.pos]);
+  if (r.reset) {
+    localStorage.setItem('dn.qseen', JSON.stringify(qSeen().filter((id) => !pool.includes(id))));
+    if (m.hist.length) toast('You’ve seen them all. Shuffling again!');
+  }
+  qMarkSeen(r.q.id);
+  m.hist = m.hist.slice(0, m.pos + 1);
+  m.hist.push(r.q.id);
+  m.pos = m.hist.length - 1;
+  m.left = r.left;
+  m.anim = 'next';
+}
+
+MODALS.talk = () => {
+  const m = state.modal;
+  if (!m.hist) { m.cat = localStorage.getItem('dn.qcat') || 'all'; m.hist = []; m.pos = -1; qAdvance(); m.anim = ''; }
+  const q = QUESTIONS.find((x) => x.id === m.hist[m.pos]);
+  const ci = catInfo(q.cat);
+  return `<h2>Let's talk 💬</h2>
+  <p class="muted">For the drive, dinner, or whenever. Take turns answering.</p>
+  <div class="chips q-cats">${Q_CATS.map((c) => chip(`${c.emoji} ${c.label}`, m.cat === c.id, 'qCat', { v: c.id })).join('')}</div>
+  <button class="q-card q-${q.cat} ${m.anim ? `q-${m.anim}` : ''}" data-act="qNext" aria-label="Next question">
+    <span class="q-tag">${ci.emoji} ${ci.label}</span>
+    <span class="q-text">${esc(q.text)}</span>
+    <span class="q-hint">Tap for the next one</span>
+  </button>
+  <div class="q-nav">
+    <button class="btn ghost" data-act="qBack" ${m.pos > 0 ? '' : 'disabled'}>← Back</button>
+    <button class="btn" data-act="qNext">Next question</button>
+  </div>
+  <p class="muted small center">${m.left > 0 ? `${m.left} more to go` : 'Last new one in this set!'}</p>`;
+};
+
+MODAL_AFTER.talk = () => {
+  const on = document.querySelector('.q-cats .chip.on');
+  const row = on?.parentElement;
+  if (row) row.scrollLeft = on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2;
+};
+
 MODALS.find = () => {
   const n = activeFilterCount(state.filters);
   return `<h2>Find new dates 🔎</h2>
@@ -1297,6 +1354,10 @@ const ACTIONS = {
   planSave: () => savePlan(),
   pickMode: (el) => { state.pickMode = el.dataset.v; render(); },
   openSettings: () => openModal('settings'),
+  openTalk: () => openModal('talk'),
+  qNext: () => { const m = state.modal; if (m.pos < m.hist.length - 1) { m.pos += 1; m.anim = 'next'; } else qAdvance(); renderModal(); },
+  qBack: () => { const m = state.modal; if (m.pos > 0) { m.pos -= 1; m.anim = 'back'; renderModal(); } },
+  qCat: (el) => { const m = state.modal; m.cat = el.dataset.v; localStorage.setItem('dn.qcat', m.cat); m.hist = m.hist.slice(0, m.pos + 1); qAdvance(); renderModal(); },
   openInstall: () => openModal('install'),
   openFind: () => openModal('find'),
   openInvite: () => openModal('invite'),
