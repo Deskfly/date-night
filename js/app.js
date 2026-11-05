@@ -138,7 +138,7 @@ function viewHeader() {
     <div class="brand">Date Night <span class="heart">♥</span></div>
     <div class="top-right">
       ${wx ? `<span class="pill" title="Weather">${wx.emoji} ${wx.temp}°</span>` : ''}
-      <button class="icon-btn" data-act="openSettings" aria-label="Settings"><span class="dot ${dot}" title="${dotTitle}"></span>⚙️</button>
+      <button class="icon-btn" data-act="openSettings" aria-label="Settings"><span class="dot ${dot}" title="${dotTitle}"></span>${icon('gear', 'ico gear')}</button>
     </div>
   </header>`;
 }
@@ -156,13 +156,23 @@ function viewInstallBanner() {
   </div>`;
 }
 
+// Line icons (24px grid, stroke = currentColor) so the bar looks the same on every phone.
+const ICONS = {
+  pick: '<path d="M12 21s-7-4.35-7-10a4 4 0 0 1 7-2.65A4 4 0 0 1 19 11c0 5.65-7 10-7 10z"/><path d="M17.5 2.5l.6 1.4 1.4.6-1.4.6-.6 1.4-.6-1.4-1.4-.6 1.4-.6z" fill="currentColor" stroke="none"/>',
+  plans: '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="15" r="1.4" fill="currentColor" stroke="none"/>',
+  memories: '<rect x="4" y="3.5" width="16" height="17" rx="3"/><path d="M12 16.5s-3.5-2.1-3.5-4.7A1.9 1.9 0 0 1 12 10.6a1.9 1.9 0 0 1 3.5 1.2c0 2.6-3.5 4.7-3.5 4.7z"/><path d="M8 7h8"/>',
+  ideas: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+};
+const icon = (k, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[k]}</svg>`;
+
 function viewTabs() {
-  const tabs = [['pick', '🌙', 'Pick'], ['plans', '📅', 'Plans'], ['memories', '💞', 'Memories'], ['ideas', '💡', 'Ideas']];
+  const tabs = [['pick', 'Pick'], ['plans', 'Plans'], ['memories', 'Memories'], ['ideas', 'Ideas']];
   const needs = needsMyRating().length + readyToReveal().length;
   const upcoming = store.list('date').filter((d) => d.data.status === 'planned').length;
-  return `<nav class="tabs">${tabs.map(([k, i, l]) => `
+  return `<nav class="tabs">${tabs.map(([k, l]) => `
     <button class="tab ${state.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">
-      <span class="tab-i">${i}${k === 'memories' && needs ? `<b class="badge">${needs}</b>` : ''}${k === 'pick' && tonight.badge() ? '<b class="badge">!</b>' : ''}${k === 'plans' && upcoming ? `<b class="badge soft">${upcoming}</b>` : ''}</span><span>${l}</span>
+      <span class="tab-i">${icon(k)}${k === 'memories' && needs ? `<b class="badge">${needs}</b>` : ''}${k === 'pick' && tonight.badge() ? '<b class="badge">!</b>' : ''}${k === 'plans' && upcoming ? `<b class="badge soft">${upcoming}</b>` : ''}</span><span>${l}</span>
     </button>`).join('')}</nav>`;
 }
 
