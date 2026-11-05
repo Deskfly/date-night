@@ -1,5 +1,5 @@
 // Offline support. Bump VERSION whenever app files change so phones get the update.
-const VERSION = 'dn-v3';
+const VERSION = 'dn-v4';
 const SHELL = [
   './', 'index.html', 'styles.css', 'manifest.webmanifest',
   'js/app.js', 'js/tonight.js', 'js/store.js', 'js/logic.js', 'js/seed.js', 'js/config.js',

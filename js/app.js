@@ -4,13 +4,14 @@ import { createTonight } from './tonight.js';
 import {
   SEASONS, seasonOf, todayISO, nextWeekday, prettyDate, fetchWeather, badOutdoorDay, describeCode,
   costLabel, driveLabel, DEFAULT_FILTERS, activeFilterCount, applyFilters, buildHistory, scoreIdea,
-  weightedPick, weightedSample, RATING_PARAMS, compareRatings, inSeason, wearTips,
+  weightedPick, weightedSample, RATING_PARAMS, compareRatings, inSeason, wearTips, ideaEmoji,
 } from './logic.js';
 
 // ---------- state ----------
 
 const state = {
-  tab: localStorage.getItem('dn.tab') || 'tonight',
+  tab: ({ tonight: 'pick', spin: 'pick', decide: 'pick', dates: 'plans' })[localStorage.getItem('dn.tab')] || localStorage.getItem('dn.tab') || 'pick',
+  pickMode: 'match', // match | spin | decide
   filters: { ...DEFAULT_FILTERS, ...JSON.parse(localStorage.getItem('dn.filters') || '{}') },
   filtersOpen: false,
   sort: 'best',
@@ -85,8 +86,8 @@ function render() {
     ${viewInstallBanner()}
     <main class="main">${VIEWS[state.tab]()}</main>
     ${viewTabs()}`;
-  if (state.tab === 'spin') drawWheel();
-  if (state.tab === 'tonight') { tonight.after(); tonight.markSeen(); }
+  if (state.tab === 'pick' && state.pickMode === 'spin') drawWheel();
+  if (state.tab === 'pick' && state.pickMode === 'match') { tonight.after(); tonight.markSeen(); }
 }
 
 function renderModal() {
@@ -156,11 +157,12 @@ function viewInstallBanner() {
 }
 
 function viewTabs() {
-  const tabs = [['tonight', '🌙', 'Tonight'], ['ideas', '💡', 'Ideas'], ['spin', '🎡', 'Spin'], ['decide', '⚖️', 'Decide'], ['dates', '💞', 'Our dates']];
+  const tabs = [['pick', '🌙', 'Pick'], ['plans', '📅', 'Plans'], ['memories', '💞', 'Memories'], ['ideas', '💡', 'Ideas']];
   const needs = needsMyRating().length + readyToReveal().length;
+  const upcoming = store.list('date').filter((d) => d.data.status === 'planned').length;
   return `<nav class="tabs">${tabs.map(([k, i, l]) => `
     <button class="tab ${state.tab === k ? 'on' : ''}" data-act="tab" data-v="${k}">
-      <span class="tab-i">${i}${k === 'dates' && needs ? `<b class="badge">${needs}</b>` : ''}${k === 'tonight' && tonight.badge() ? '<b class="badge">!</b>' : ''}</span><span>${l}</span>
+      <span class="tab-i">${i}${k === 'memories' && needs ? `<b class="badge">${needs}</b>` : ''}${k === 'pick' && tonight.badge() ? '<b class="badge">!</b>' : ''}${k === 'plans' && upcoming ? `<b class="badge soft">${upcoming}</b>` : ''}</span><span>${l}</span>
     </button>`).join('')}</nav>`;
 }
 
@@ -248,24 +250,13 @@ function viewIdeas() {
   let rows = filtered(c);
   if (state.sort === 'best') rows.sort((a, b) => b.score - a.score);
   else rows.sort((a, b) => a.idea.title.localeCompare(b.idea.title));
-  const top = rows[0];
   return `
     ${!home() ? `<div class="banner"><span>🌦️ Want weather-smart picks? Share your location once.</span><button class="link" data-act="useLocation">Turn on</button></div>` : ''}
     ${viewFilters()}
-    ${top ? `<section class="hero">
-      <div class="hero-label">Best bet for tonight</div>
-      <div class="hero-title">${esc(top.idea.title)}</div>
-      <div class="muted small">${esc(top.why.join(' · ') || 'Fits your filters')}</div>
-      <div class="row"><button class="btn" data-act="planIdea" data-id="${top.idea.id}">Plan it</button>
-      <button class="btn ghost" data-act="tab" data-v="spin">Spin instead 🎡</button></div>
-    </section>` : ''}
+    <div class="grid2"><button class="btn ghost" data-act="openFind">🔎 Find new</button><button class="btn ghost" data-act="newIdea">+ Add idea</button></div>
     <div class="list-head">
       <span><b>${rows.length}</b> idea${rows.length === 1 ? '' : 's'} match</span>
-      <span>
-        <button class="link" data-act="sort">${state.sort === 'best' ? 'Best first' : 'A–Z'} ⇅</button>
-        <button class="btn small ghost" data-act="openFind">🔎 Find new</button>
-        <button class="btn small ghost" data-act="newIdea">+ Add</button>
-      </span>
+      <button class="link" data-act="sort">${state.sort === 'best' ? 'Best first' : 'A–Z'} ⇅</button>
     </div>
     ${rows.length ? rows.map((r) => ideaCard(r, c)).join('') : `<p class="empty">Nothing matches. Try loosening a filter.</p>`}
   `;
@@ -481,23 +472,6 @@ function dateCard(d) {
   </article>`;
 }
 
-function viewDates() {
-  const dates = datesSorted();
-  const planned = dates.filter((d) => d.data.status === 'planned').sort((a, b) => (a.data.when || '').localeCompare(b.data.when || ''));
-  const done = dates.filter((d) => d.data.status === 'done');
-  const todo = [...new Set([...needsMyRating(), ...readyToReveal()])];
-  const rest = done.filter((d) => !todo.includes(d));
-  return `
-    ${viewInsights(done)}
-    <div class="row"><button class="btn" data-act="planIdea">+ Plan a date</button>
-    <button class="btn ghost" data-act="logUnplanned">Log one we already did</button></div>
-    ${todo.length ? `<h3>Your turn ✨</h3>${todo.map(dateCard).join('')}` : ''}
-    ${planned.length ? `<h3>Coming up</h3>${planned.map(dateCard).join('')}` : ''}
-    ${rest.length ? `<h3>Our history</h3>${rest.map(dateCard).join('')}` : ''}
-    ${!dates.length ? `<p class="empty">No dates yet. Plan one from Ideas, Spin, or Decide, then rate it after.</p>` : ''}
-  `;
-}
-
 function viewInsights(done) {
   if (!done.length) return '';
   const all = done.map((d) => {
@@ -528,10 +502,83 @@ const tonight = createTonight({
   partnerName: () => partnerName(),
   render: () => render(),
   toast: (m) => toast(m),
-  goDecide: (a, b) => { state.decide = { ...state.decide, a, b, result: null }; state.tab = 'decide'; render(); window.scrollTo(0, 0); },
+  goDecide: (a, b) => { state.decide = { ...state.decide, a, b, result: null }; state.tab = 'pick'; state.pickMode = 'decide'; render(); window.scrollTo(0, 0); },
 });
 
-const VIEWS = { tonight: () => tonight.view(), ideas: viewIdeas, spin: viewSpin, decide: viewDecide, dates: viewDates };
+// ---------- Pick / Plans / Memories ----------
+
+function nudges() {
+  const items = [];
+  for (const d of readyToReveal()) items.push(`<button class="nudge hot" data-act="reveal" data-id="${d.id}">🎁 Both ratings are in for <b>${esc(d.data.title)}</b>. Reveal!</button>`);
+  for (const d of needsMyRating()) if (!readyToReveal().includes(d)) items.push(`<button class="nudge" data-act="rate" data-id="${d.id}">⭐ How was <b>${esc(d.data.title)}</b>? Rate it</button>`);
+  const today = todayISO();
+  for (const d of store.list('date')) {
+    if (d.data.status === 'planned' && d.data.when < today) items.push(`<button class="nudge" data-act="logDate" data-id="${d.id}">📝 Did you go to <b>${esc(d.data.title)}</b>? Log it</button>`);
+  }
+  return items.slice(0, 3).join('');
+}
+
+function viewPick() {
+  const modes = [['match', '💞', 'Match'], ['spin', '🎡', 'Spin'], ['decide', '⚖️', 'This or that']];
+  const body = state.pickMode === 'spin' ? viewSpin() : state.pickMode === 'decide' ? viewDecide() : tonight.view();
+  return `${nudges()}
+    <div class="seg">${modes.map(([k, e, l]) => `<button class="${state.pickMode === k ? 'on' : ''}" data-act="pickMode" data-v="${k}">${e} ${l}</button>`).join('')}</div>
+    ${body}`;
+}
+
+function planCard(d) {
+  const x = d.data;
+  const c = ctx();
+  const idea = c.ideasById[x.ideaId];
+  const day = state.weather?.days?.[x.when];
+  const tips = wearTips(idea, day, x.time).slice(0, 3);
+  const isToday = x.when === todayISO();
+  return `<article class="card plan">
+    <div class="plan-top" data-act="openDate" data-id="${d.id}">
+      <div class="plan-date"><b>${new Date(`${x.when}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric' })}</b><span>${new Date(`${x.when}T12:00:00`).toLocaleDateString(undefined, { month: 'short' })}</span></div>
+      <div class="plan-main">
+        <div class="idea-title">${idea ? `${ideaEmoji(idea)} ` : ''}${esc(x.title)}</div>
+        <div class="meta"><span>${isToday ? '<b>Tonight</b>' : prettyDate(x.when)}${x.time ? ` · ${fmtTime(x.time)}` : ''}</span>
+        ${day ? `<span>${day.emoji} ${day.hi}°${day.pop >= 30 ? ` · ${day.pop}% rain` : ''}</span>` : ''}
+        ${idea ? `<span>💲${costLabel(idea)}</span>` : ''}</div>
+      </div>
+    </div>
+    ${tips.length ? `<div class="wear">${tips.map(([e, t]) => `<span>${e} ${esc(t)}</span>`).join('')}</div>` : ''}
+    <div class="row">
+      <a class="btn small ghost" href="${esc(gcalLink(d))}" target="_blank" rel="noopener">📅 Calendar</a>
+      ${x.when <= todayISO() ? `<button class="btn small" data-act="logDate" data-id="${d.id}">We went! 🎉</button>` : `<button class="btn small ghost" data-act="openDate" data-id="${d.id}">Details</button>`}
+    </div>
+  </article>`;
+}
+
+function fmtTime(t) {
+  const [h, m] = t.split(':').map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+function viewPlans() {
+  const planned = store.list('date').filter((d) => d.data.status === 'planned').sort((a, b) => (a.data.when || '').localeCompare(b.data.when || ''));
+  return `
+    <button class="btn block-btn" data-act="planIdea">+ Plan a date</button>
+    ${planned.length ? `<h3>Coming up</h3>${planned.map(planCard).join('')}`
+      : `<div class="empty"><div class="big">📅</div><p>Nothing planned yet.</p><p class="small">Plan one here, or use <b>Pick</b> to find one together.</p></div>`}
+  `;
+}
+
+function viewMemories() {
+  const done = datesSorted().filter((d) => d.data.status === 'done');
+  const todo = [...new Set([...needsMyRating(), ...readyToReveal()])];
+  const rest = done.filter((d) => !todo.includes(d));
+  return `
+    ${viewInsights(done)}
+    ${todo.length ? `<h3>Your turn ✨</h3>${todo.map(dateCard).join('')}` : ''}
+    ${rest.length ? `<h3>Our dates</h3>${rest.map(dateCard).join('')}` : ''}
+    ${!done.length ? `<div class="empty"><div class="big">💞</div><p>Your dates will show up here after you go.</p><p class="small">You'll each rate them privately, then reveal together.</p></div>` : ''}
+    <div class="center"><button class="link" data-act="logUnplanned">+ Add a date we already went on</button></div>
+  `;
+}
+
+const VIEWS = { pick: viewPick, plans: viewPlans, memories: viewMemories, ideas: viewIdeas };
 
 // ---------- Setup ----------
 
@@ -705,61 +752,103 @@ function saveIdea(form) {
   toast('Saved');
 }
 
-MODALS.plan = () => {
-  const c = ctx();
+// Plan a date: one question per screen (what → when → summary).
+function planDraft() {
   const m = state.modal;
-  const ideas = c.ideas.filter((i) => !i.hidden).sort((a, b) => a.title.localeCompare(b.title));
-  const idea = c.ideasById[m.ideaId];
-  const existing = m.dateId ? store.get(m.dateId)?.data : null;
-  const when = existing?.when || m.when || nextWeekday(1);
-  return `<h2>${m.past ? 'Log a past date' : existing ? 'Edit plan' : 'Plan a date'} 📅</h2>
-  <form data-form="savePlan" class="col">
-    <label>What are we doing?<select name="ideaId">
-      <option value="">Something else (type below)</option>
-      ${ideas.map((i) => `<option value="${i.id}" ${i.id === (existing?.ideaId || m.ideaId) ? 'selected' : ''}>${esc(i.title)}</option>`).join('')}
-    </select></label>
-    <input name="title" placeholder="Or describe it" value="${esc(existing && !existing.ideaId ? existing.title : '')}">
-    <div class="grid2">
-      <label>Day<input type="date" name="when" required value="${when}"></label>
-      <label>Time<input type="time" name="time" value="${esc(existing?.time || '17:30')}"></label>
-    </div>
-    <label>Notes<textarea name="notes" rows="2" placeholder="Reservation, address, what to bring…">${esc(existing?.notes || '')}</textarea></label>
-    <div id="plan-wx" class="muted small"></div>
-    <button class="btn">${m.past ? 'Next: how did it go?' : 'Save plan'}</button>
-    ${idea && !m.past ? `<p class="muted small">This just saves it in the app. Nothing is sent to anyone's calendar.</p>` : ''}
-  </form>`;
-};
-MODAL_AFTER.plan = () => {
-  const input = $('#modal input[name=when]');
-  const show = () => {
-    const day = state.weather?.days?.[input.value];
-    $('#plan-wx').textContent = day ? `${day.emoji} Forecast: ${day.label}, ${day.hi}°/${day.lo}°${day.pop ? `, ${day.pop}% rain` : ''}. Sunset ${day.sunset}.` : '';
-  };
-  input.addEventListener('change', show);
-  show();
+  if (!m.draft) {
+    const ex = m.dateId ? store.get(m.dateId)?.data : null;
+    m.draft = {
+      ideaId: ex?.ideaId || m.ideaId || '',
+      title: ex && !ex.ideaId ? ex.title : '',
+      when: ex?.when || m.when || (m.past ? todayISO() : nextWeekday(1)),
+      time: ex?.time || '17:30',
+      notes: ex?.notes || '',
+    };
+    m.step = ex ? 2 : m.draft.ideaId ? 1 : 0;
+  }
+  return m.draft;
+}
+
+function whenChoices(past) {
+  const d = new Date();
+  const iso = (off) => { const x = new Date(d); x.setDate(x.getDate() + off); return todayISO(x); };
+  if (past) return [[iso(0), 'Today'], [iso(-1), 'Yesterday'], [iso(-2), '2 days ago']];
+  const sat = nextWeekday(6);
+  return [[iso(0), 'Tonight'], [iso(1), 'Tomorrow'], [nextWeekday(1), `Next Monday`], [sat, 'Saturday']];
+}
+
+MODALS.plan = () => {
+  const m = state.modal;
+  const dr = planDraft();
+  const c = ctx();
+  const dots = [0, 1, 2].map((i) => `<i class="${i <= m.step ? 'on' : ''}"></i>`).join('');
+  const title = m.past ? 'Add a past date' : m.dateId ? 'Edit plan' : 'Plan a date';
+  if (m.step === 0) {
+    const rows = filtered(c).sort((a, b) => b.score - a.score);
+    const favs = c.ideas.filter((i) => i.fav && !i.hidden);
+    const top = rows.filter((r) => !r.idea.fav).slice(0, 5).map((r) => r.idea);
+    const all = c.ideas.filter((i) => !i.hidden).sort((a, b) => a.title.localeCompare(b.title));
+    const btn = (i) => `<button class="pick-row" data-act="planPick" data-id="${i.id}">${ideaEmoji(i)} <span>${esc(i.title)}</span><small>${costLabel(i)}</small></button>`;
+    return `<div class="dots">${dots}</div><h2>${title}</h2><h3 class="q">What are you doing?</h3>
+      ${favs.length ? `<h3>♥ Favorites</h3>${favs.map(btn).join('')}` : ''}
+      ${top.length ? `<h3>Good fits right now</h3>${top.map(btn).join('')}` : ''}
+      <details><summary class="link">See all ${all.length} ideas</summary>${all.map(btn).join('')}</details>
+      <h3>Something else</h3>
+      <div class="row"><input id="plan-other" placeholder="Type your own idea" value="${esc(dr.title)}" style="flex:1"><button class="btn small" data-act="planOther">Next</button></div>`;
+  }
+  const what = c.ideasById[dr.ideaId]?.title || dr.title;
+  if (m.step === 1) {
+    return `<div class="dots">${dots}</div><h2>${title}</h2>
+      <p class="muted center">${esc(what)}</p>
+      <h3 class="q">When?</h3>
+      <div class="choices">${whenChoices(m.past).map(([v, l]) => `<button class="choice ${dr.when === v ? 'on' : ''}" data-act="planWhen" data-v="${v}">${l} <small class="muted">${prettyDate(v)}</small></button>`).join('')}</div>
+      <label class="center">or pick a day <input type="date" id="plan-date" value="${dr.when}"></label>
+      <h3 class="q">What time?</h3>
+      <div class="chips center">${['17:30', '18:00', '19:00', '20:00'].map((t) => `<button class="chip ${dr.time === t ? 'on' : ''}" data-act="planTime" data-v="${t}">${fmtTime(t)}</button>`).join('')}
+      <input type="time" id="plan-time" value="${dr.time}" style="width:auto"></div>
+      <div class="row center"><button class="btn ghost" data-act="planStep" data-v="0">Back</button><button class="btn" data-act="planStep" data-v="2">Next</button></div>`;
+  }
+  const idea = c.ideasById[dr.ideaId];
+  const day = state.weather?.days?.[dr.when];
+  return `<div class="dots">${dots}</div><h2>${title}</h2>
+    <section class="summary">
+      <div class="sum-emoji">${idea ? ideaEmoji(idea) : '💕'}</div>
+      <div class="hero-title">${esc(what)}</div>
+      <p>📅 ${prettyDate(dr.when)} · ${fmtTime(dr.time)} <button class="link small" data-act="planStep" data-v="1">change</button></p>
+      ${idea ? `<p class="small">💲 ${costLabel(idea)} · 🚗 ${driveLabel(idea)}</p>` : ''}
+      ${day ? `<p class="small">${day.emoji} ${day.label}, ${day.hi}°/${day.lo}°${day.pop ? `, ${day.pop}% rain` : ''} · sunset ${day.sunset}</p>` : ''}
+      ${day && badOutdoorDay(day) && idea?.tags?.includes('outdoors') ? '<p class="note">Weather looks rough for being outside. Maybe have a backup?</p>' : ''}
+    </section>
+    ${m.past ? '' : wearBlock(idea, day, dr.time)}
+    <label>Notes<textarea id="plan-notes" rows="2" placeholder="Reservation, address, anything to remember…">${esc(dr.notes)}</textarea></label>
+    <div class="row center"><button class="btn ghost" data-act="planStep" data-v="0">Change idea</button>
+    <button class="btn" data-act="planSave">${m.past ? 'Next: how did it go?' : m.dateId ? 'Save changes' : 'Save plan 💕'}</button></div>`;
 };
 
-function savePlan(form) {
-  const fd = new FormData(form);
+MODAL_AFTER.plan = () => {
+  const dr = state.modal.draft;
+  $('#plan-date')?.addEventListener('change', (e) => { dr.when = e.target.value; renderModal(); });
+  $('#plan-time')?.addEventListener('change', (e) => { dr.time = e.target.value; renderModal(); });
+  $('#plan-notes')?.addEventListener('input', (e) => { dr.notes = e.target.value; });
+};
+
+function savePlan() {
+  const m = state.modal;
+  const dr = m.draft;
   const c = ctx();
-  const ideaId = fd.get('ideaId');
-  const title = ideaId ? c.ideasById[ideaId].title : fd.get('title').trim();
+  const title = c.ideasById[dr.ideaId]?.title || dr.title;
   if (!title) { toast('Pick an idea or type one'); return; }
-  const id = state.modal.dateId || uid('d');
+  const id = m.dateId || uid('d');
   const prev = store.get(id)?.data || {};
-  const data = {
-    ...prev, ideaId: ideaId || null, title, when: fd.get('when'), time: fd.get('time'), notes: fd.get('notes').trim(),
+  store.put('date', id, {
+    ...prev, ideaId: dr.ideaId || null, title, when: dr.when, time: dr.time, notes: (dr.notes || '').trim(),
     status: prev.status || 'planned', createdBy: prev.createdBy || store.me.name,
-  };
-  store.put('date', id, data);
-  if (state.modal.past) {
-    openModal('log', { dateId: id });
-  } else {
-    closeModal();
-    state.tab = 'dates';
-    render();
-    toast('Planned! 💕');
-  }
+  });
+  if (m.past) { openModal('log', { dateId: id }); return; }
+  closeModal();
+  state.tab = 'plans';
+  render();
+  toast('Planned! 💕');
 }
 
 MODALS.date = () => {
@@ -1140,6 +1229,13 @@ MODALS.settings = () => {
 const ACTIONS = {
   tab: (el) => { state.tab = el.dataset.v; localStorage.setItem('dn.tab', state.tab); closeModal(); render(); window.scrollTo(0, 0); },
   closeModal,
+  planPick: (el) => { const m = state.modal; m.draft.ideaId = el.dataset.id; m.draft.title = ''; m.step = 1; renderModal(); },
+  planOther: () => { const v = $('#plan-other').value.trim(); if (!v) { toast('Type an idea first'); return; } const m = state.modal; m.draft.ideaId = ''; m.draft.title = v; m.step = 1; renderModal(); },
+  planWhen: (el) => { state.modal.draft.when = el.dataset.v; renderModal(); },
+  planTime: (el) => { state.modal.draft.time = el.dataset.v; renderModal(); },
+  planStep: (el) => { state.modal.step = Number(el.dataset.v); renderModal(); },
+  planSave: () => savePlan(),
+  pickMode: (el) => { state.pickMode = el.dataset.v; render(); },
   openSettings: () => openModal('settings'),
   openInstall: () => openModal('install'),
   openFind: () => openModal('find'),
@@ -1269,7 +1365,7 @@ document.addEventListener('input', (e) => {
 
 Object.assign(ACTIONS, tonight.actions);
 
-const FORMS = { startCouple, joinCode, saveIdea, savePlan, saveLog, saveRating, saveEmail, saveArea };
+const FORMS = { startCouple, joinCode, saveIdea, saveLog, saveRating, saveEmail, saveArea };
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-form]');
   if (!f) return;

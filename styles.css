@@ -316,3 +316,29 @@ code { font-size: 13px; }
 .find-link { display: flex; gap: 12px; align-items: flex-start; background: var(--card); border-radius: 14px; padding: 12px; box-shadow: var(--shadow); color: var(--ink); text-decoration: none; }
 .find-e { font-size: 26px; line-height: 1; }
 .find-link code { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; word-break: break-word; }
+
+/* redesign: pick modes, nudges, plans */
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--card); border-radius: 14px; padding: 4px; box-shadow: var(--shadow); margin: 8px 0 6px; }
+.seg button { border: 0; background: none; border-radius: 10px; padding: 9px 4px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.seg button.on { background: var(--brand); color: #fff; }
+.nudge { display: block; width: 100%; text-align: left; border: 0; border-radius: 14px; padding: 12px 14px; margin: 6px 0; background: var(--card); box-shadow: var(--shadow); font-size: 14px; }
+.nudge.hot { background: var(--brand-soft); }
+.badge.soft { background: var(--muted); }
+.block-btn { display: block; width: 100%; font-size: 17px; padding: 14px; margin: 8px 0; }
+.plan .plan-top { display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.plan-date { flex: none; width: 52px; height: 56px; border-radius: 14px; background: var(--brand-soft); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+.plan-date b { font-size: 22px; color: var(--brand); }
+.plan-date span { font-size: 12px; text-transform: uppercase; font-weight: 700; color: var(--muted); }
+.plan-main { min-width: 0; }
+.plan .wear { margin-top: 10px; }
+.plan .row { margin-bottom: 0; }
+.plan a.btn { text-decoration: none; }
+.pick-row { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 0; background: var(--card); border-radius: 12px; padding: 11px 12px; margin: 5px 0; box-shadow: var(--shadow); font-weight: 600; }
+.pick-row span { flex: 1; }
+.pick-row small { color: var(--muted); font-weight: 500; }
+.summary { text-align: center; background: var(--card); border-radius: 18px; padding: 16px; box-shadow: var(--shadow); margin: 10px 0; }
+.summary p { margin: 6px 0; }
+.sum-emoji { font-size: 54px; }
+.choice small { font-weight: 500; font-size: 13px; margin-left: 6px; }
+details summary { cursor: pointer; margin: 8px 0; }
+.sheet .dots { margin-top: 0; }

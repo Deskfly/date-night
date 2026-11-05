@@ -15,3 +15,5 @@ Each decision: what we chose, and why. Newest at the bottom.
 11. **Swipe one card at a time for Tonight.** Less decision fatigue than a long list. Chips that changed from the last card are highlighted.
 12. **Calendar via Google's prefilled link, not the Calendar API.** Free, no sign-in setup, and the user always taps Save themselves.
 13. **Find new dates opens Google instead of showing results in the app.** Showing results inside the app needs a paid search API. Opening Google with a smart prefilled search is free.
+14. **Four tabs: Pick, Plans, Memories, Ideas.** Fewer, purpose-based tabs. Spin and This-or-that live inside Pick as alternate ways to choose, so there's one place to decide.
+15. **Planning is step-by-step.** One question per screen, like the check-in, to keep it easy.

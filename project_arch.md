@@ -1,5 +1,11 @@
 # Project architecture
 
+## Screens (built around pick → plan → go → remember)
+1. **Pick** (home): reminders that need you (rate, reveal, log), then 3 ways to choose: Match (private check-in + swipe, `js/tonight.js`), Spin, This or that.
+2. **Plans**: upcoming dates with weather, what to wear, calendar button. "+ Plan a date" is a 3-step flow: what → when → summary.
+3. **Memories**: stats, dates to rate/reveal, past dates.
+4. **Ideas**: the idea library with filters, + Add idea, 🔎 Find new.
+
 ## Pieces
 - **The app** (`index.html`, `styles.css`, `js/`): runs entirely in the phone's browser.
 - **Offline + install** (`sw.js`, `manifest.webmanifest`, `icons/`): lets it install to the home screen and open without signal.
