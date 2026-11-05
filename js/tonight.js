@@ -185,6 +185,7 @@ export function createTonight(api) {
         ${topA && topB ? `<p>${esc(store.me.name)} liked <b>${esc(c.ideasById[topA].title)}</b>.<br>${esc(api.partnerName())} liked <b>${esc(c.ideasById[topB].title)}</b>.</p>
           <button class="btn" data-act="tnCompromise" data-a="${topA}" data-b="${topB}">Let fate decide ⚖️</button>`
           : `<p>One of you passed on everything. Maybe a cozy night in? 🛋️</p>`}
+        <div class="row center"><button class="btn ghost small" data-act="openFind">🔎 Find something new</button></div>
         <div><button class="link" data-act="tnRedoBoth">Start tonight over</button></div>
       </section>`;
     }

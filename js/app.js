@@ -263,7 +263,8 @@ function viewIdeas() {
       <span><b>${rows.length}</b> idea${rows.length === 1 ? '' : 's'} match</span>
       <span>
         <button class="link" data-act="sort">${state.sort === 'best' ? 'Best first' : 'A–Z'} ⇅</button>
-        <button class="btn small ghost" data-act="newIdea">+ Add idea</button>
+        <button class="btn small ghost" data-act="openFind">🔎 Find new</button>
+        <button class="btn small ghost" data-act="newIdea">+ Add</button>
       </span>
     </div>
     ${rows.length ? rows.map((r) => ideaCard(r, c)).join('') : `<p class="empty">Nothing matches. Try loosening a filter.</p>`}
@@ -1002,6 +1003,57 @@ function partnerEmail() {
   return (couple().emails || {})[partnerName()] || '';
 }
 
+function saveArea(form) {
+  const c = store.get('couple')?.data || couple();
+  store.put('couple', 'couple', { ...c, searchArea: form.area.value.trim() });
+  toast('Saved');
+  renderModal();
+}
+
+// ---------- Find new dates (prefilled Google searches) ----------
+
+const TAG_WORDS = {
+  burgers: 'burgers', chinese: 'chinese food', steak: 'steakhouse', greek: 'greek', diner: 'diner', treats: 'dessert',
+  'cook-at-home': 'cooking class', picnic: 'picnic spot', outdoors: 'outdoor', walk: 'walking trail', indoors: 'indoor',
+  'at-home': 'at home', show: 'live show', holiday: 'holiday lights', active: 'active', games: 'arcade OR bowling',
+  drive: 'scenic drive', 'day-trip': 'day trip', museum: 'museum',
+};
+const FOOD = ['burgers', 'chinese', 'steak', 'greek', 'diner', 'treats'];
+
+function findSearches() {
+  const c = couple();
+  const area = c.searchArea ? `"${c.searchArea}"` : 'near me';
+  const f = state.filters;
+  const season = seasonOf().toLowerCase();
+  const month = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const minus = f.exclude.map((t) => TAG_WORDS[t]).filter(Boolean).flatMap((w) => w.split(' OR ')).map((w) => `-${w.split(' ')[0]}`).join(' ');
+  const foods = f.include.filter((t) => FOOD.includes(t)).map((t) => TAG_WORDS[t]);
+  const acts = f.include.filter((t) => !FOOD.includes(t)).map((t) => TAG_WORDS[t]);
+  const cheap = f.budget !== 'any' && f.budget <= 30 ? '(free OR cheap OR "under $20")' : '';
+  const energy = f.energy.length === 1 ? { Low: 'relaxing', Med: '', High: 'active OR adventurous' }[f.energy[0]] : '';
+  const or = (xs) => (xs.length > 1 ? `(${xs.join(' OR ')})` : xs[0] || '');
+  return [
+    { emoji: '🎟️', label: 'Events happening now', q: `("things to do" OR events OR festival) ${area} "${month}" -jobs -hiring ${minus}` },
+    { emoji: '🍽️', label: foods.length ? `Restaurants: ${foods.join(', ')}` : 'Date-night restaurants', q: `${or(foods.length ? foods : ['restaurant'])} "date night" ${area} -chain ${cheap} ${minus}` },
+    { emoji: '🗺️', label: acts.length ? `Things to do: ${acts.join(', ')}` : `${seasonOf()} date ideas`, q: `${or(acts.length ? acts : [`${season} date ideas`])} ${energy ? `(${energy})` : ''} ${area} ${cheap} ${minus}` },
+    { emoji: '💬', label: 'What locals recommend (Reddit)', q: `site:reddit.com ("date night" OR "date ideas") ${area} ${minus}` },
+    { emoji: '📅', label: 'Event listings', q: `(site:eventbrite.com OR site:allevents.in) ${area} ${season}` },
+    { emoji: '💸', label: 'Free or cheap dates', q: `(free OR cheap) "date ideas" ${area} ${season} ${minus}` },
+  ].map((x) => ({ ...x, q: x.q.replace(/\s+/g, ' ').trim() }));
+}
+
+MODALS.find = () => {
+  const n = activeFilterCount(state.filters);
+  return `<h2>Find new dates 🔎</h2>
+  <p class="muted">These open Google with a search built from your filters${n ? ` (${esc(filterSummary())})` : ''}. Find something good? Come back and tap <b>Add it</b>.</p>
+  <div class="col">${findSearches().map((x) => `
+    <a class="find-link" href="https://www.google.com/search?q=${encodeURIComponent(x.q)}" target="_blank" rel="noopener">
+      <span class="find-e">${x.emoji}</span><span><b>${esc(x.label)}</b><code>${esc(x.q)}</code></span>
+    </a>`).join('')}</div>
+  <div class="row"><button class="btn" data-act="newIdea">+ Add it</button>
+  ${couple().searchArea ? '' : '<span class="muted small">Searching "near me". Set a town in ⚙️ Settings for better results.</span>'}</div>`;
+};
+
 function saveEmail(form) {
   const email = form.email.value.trim();
   const c = store.get('couple')?.data || couple();
@@ -1052,6 +1104,12 @@ MODALS.settings = () => {
     <button class="btn" data-act="openInvite">Invite ${esc(partnerName())} 💌</button>
     <button class="btn ghost" data-act="openInstall">Add to home screen 📲</button>
   </div>
+  <h3>Area for "Find new dates" searches</h3>
+  <form data-form="saveArea" class="row">
+    <input name="area" placeholder="Leave blank to use 'near me'" value="${esc(c.searchArea || '')}" style="flex:1">
+    <button class="btn small">Save</button>
+  </form>
+  <p class="muted small">A town or city, like "Springfield, IL". Stored privately in your account.</p>
   <h3>Your email (for calendar invites)</h3>
   <form data-form="saveEmail" class="row">
     <input type="email" name="email" placeholder="you@example.com" value="${esc((c.emails || {})[store.me.name] || '')}" style="flex:1">
@@ -1084,6 +1142,7 @@ const ACTIONS = {
   closeModal,
   openSettings: () => openModal('settings'),
   openInstall: () => openModal('install'),
+  openFind: () => openModal('find'),
   openInvite: () => openModal('invite'),
   dismissInstall: () => { localStorage.setItem('dn.installDismissed', '1'); render(); },
   nativeInstall: async () => { state.installPrompt?.prompt(); state.installPrompt = null; closeModal(); },
@@ -1210,7 +1269,7 @@ document.addEventListener('input', (e) => {
 
 Object.assign(ACTIONS, tonight.actions);
 
-const FORMS = { startCouple, joinCode, saveIdea, savePlan, saveLog, saveRating, saveEmail };
+const FORMS = { startCouple, joinCode, saveIdea, savePlan, saveLog, saveRating, saveEmail, saveArea };
 document.addEventListener('submit', (e) => {
   const f = e.target.closest('form[data-form]');
   if (!f) return;

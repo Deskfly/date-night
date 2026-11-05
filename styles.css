@@ -313,3 +313,6 @@ code { font-size: 13px; }
 }
 @keyframes fall { to { transform: translateY(110vh) rotate(540deg); } }
 .sc-reframe { background: var(--brand-soft); border-radius: 12px; padding: 8px 10px; font-size: 14px; font-weight: 600; margin: 4px 0 8px; }
+.find-link { display: flex; gap: 12px; align-items: flex-start; background: var(--card); border-radius: 14px; padding: 12px; box-shadow: var(--shadow); color: var(--ink); text-decoration: none; }
+.find-e { font-size: 26px; line-height: 1; }
+.find-link code { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; word-break: break-word; }

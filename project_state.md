@@ -8,6 +8,7 @@ _Last updated: 2026-11-05_
 - Supabase project created on the free plan ($0). Table and access rules applied and checked.
 - Live at https://deskfly.github.io/date-night/ on GitHub Pages.
 - v2: Tonight tab (private check-in, swipe, second look, matches, "something new" celebration), what-to-wear tips, Add to Google Calendar.
+- v3: "Find new dates" prefilled Google searches from filters, with a private search area setting.
 
 ## Decisions
 See `project_decisions.md`.

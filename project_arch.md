@@ -34,3 +34,6 @@ Ideas get a weight from: in-season boost, bad weather penalty for outdoor ideas,
 
 ## Calendar
 "Add to Google Calendar" opens Google Calendar's own prefilled event page (title, time, details, partner's email as guest). Nothing is sent until the user taps Save there. Emails live in the private `couple` record.
+
+## Find new dates
+"🔎 Find new" (Ideas tab, and Tonight when nothing matches) opens prefilled Google searches built from the filters: events this month, restaurants for the foods you want, activities, Reddit local tips (site:reddit.com), event listings (site:eventbrite.com), and free/cheap ideas. "Not tonight" tags become minus words. The search area is a private setting (default "near me"). Results open in Google; no paid search API.
