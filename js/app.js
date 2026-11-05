@@ -264,7 +264,7 @@ function viewIdeas() {
 
 // ---------- Spin tab ----------
 
-const WHEEL_COLORS = ['#ff6b8b', '#ffb347', '#7bd389', '#6ec6ff', '#b39ddb', '#ff8a65', '#4dd0e1', '#f06292', '#aed581', '#ffd54f'];
+const WHEEL_COLORS = ['#ff5c7c', '#ffc9b8', '#ff8a6a', '#ffe1ea', '#ff7193', '#ffd8c4', '#f7a1b5', '#fff0e6'];
 
 function ensureWheel() {
   const rows = filtered();
@@ -283,12 +283,13 @@ function viewSpin() {
   return `
     ${viewFilters()}
     ${rows.length < 2 ? `<p class="empty">Need at least 2 matching ideas to spin. Loosen your filters.</p>` : `
+    <div class="ticker" id="ticker">${state.wheel.spinning ? '…' : res ? `${ideaEmoji(res)} ${esc(res.title)}` : 'Tap the heart to spin'}</div>
     <div class="wheel-wrap">
-      <div class="pointer">▼</div>
+      <div class="pointer"></div>
       <canvas id="wheel" width="640" height="640"></canvas>
-      <button class="spin-btn" data-act="spin" ${state.wheel.spinning ? 'disabled' : ''}>SPIN</button>
+      <button class="spin-btn" data-act="spin" ${state.wheel.spinning ? 'disabled' : ''} aria-label="Spin">♥</button>
     </div>
-    <p class="center muted small">${state.wheel.ids.length} of ${rows.length} matching ideas on the wheel. Better fits for tonight get picked more often.</p>
+    ${res && !state.wheel.spinning ? '' : `<div class="wheel-legend">${wheelIdeas().map((i) => `<span>${ideaEmoji(i)} ${esc(shortTitle(i.title))}</span>`).join('')}</div>`}
     <div class="center"><button class="link" data-act="reshuffle">🔀 Swap in different ideas</button></div>
     ${res ? `<section class="hero pop">
       <div class="hero-label">The wheel says…</div>
@@ -300,39 +301,72 @@ function viewSpin() {
   `;
 }
 
+function wheelIdeas() {
+  const c = ctx();
+  return state.wheel.ids.map((id) => c.ideasById[id]).filter(Boolean);
+}
+const shortTitle = (t) => { const x = t.split(/[(,+]/)[0].trim(); return x.length > 26 ? `${x.slice(0, 25)}…` : x; };
+
 function drawWheel() {
   const canvas = $('#wheel');
   if (!canvas) return;
-  const c = ctx();
-  const ideas = state.wheel.ids.map((id) => c.ideasById[id]).filter(Boolean);
+  const ideas = wheelIdeas();
   const g = canvas.getContext('2d');
   const R = canvas.width / 2;
   const seg = (Math.PI * 2) / ideas.length;
   g.clearRect(0, 0, canvas.width, canvas.height);
+  // soft outer ring
+  g.beginPath(); g.arc(R, R, R - 2, 0, Math.PI * 2); g.fillStyle = '#ffffff'; g.fill();
   ideas.forEach((idea, i) => {
     const start = -Math.PI / 2 + i * seg;
     g.beginPath();
     g.moveTo(R, R);
-    g.arc(R, R, R - 6, start, start + seg);
+    g.arc(R, R, R - 18, start, start + seg);
     g.closePath();
     g.fillStyle = WHEEL_COLORS[i % WHEEL_COLORS.length];
     g.fill();
-    g.strokeStyle = '#fff';
-    g.lineWidth = 4;
+    g.strokeStyle = 'rgba(255,255,255,0.9)';
+    g.lineWidth = 3;
     g.stroke();
     g.save();
     g.translate(R, R);
     g.rotate(start + seg / 2);
-    g.fillStyle = '#2b1b2e';
-    g.font = '600 26px system-ui, -apple-system, sans-serif';
-    g.textAlign = 'right';
+    g.translate(R * 0.66, 0);
+    g.rotate(Math.PI / 2);
+    g.font = '64px system-ui, "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+    g.textAlign = 'center';
     g.textBaseline = 'middle';
-    let label = idea.title.split(/[(,+]/)[0].trim();
-    if (label.length > 20) label = `${label.slice(0, 19)}…`;
-    g.fillText(label, R - 30, 0);
+    g.fillText(ideaEmoji(idea), 0, 0);
     g.restore();
   });
+  // little dots around the rim
+  for (let k = 0; k < 24; k++) {
+    const a = (k / 24) * Math.PI * 2;
+    g.beginPath(); g.arc(R + Math.cos(a) * (R - 9), R + Math.sin(a) * (R - 9), 3.5, 0, Math.PI * 2);
+    g.fillStyle = k % 2 ? '#ffd0dc' : '#ff5c7c'; g.fill();
+  }
   canvas.style.transform = `rotate(${state.wheel.rot}deg)`;
+}
+
+// While spinning, show the idea passing under the pointer.
+function watchTicker(ideas) {
+  const canvas = $('#wheel');
+  const ticker = $('#ticker');
+  if (!canvas || !ticker) return;
+  const segDeg = 360 / ideas.length;
+  let last = -1;
+  const tick = () => {
+    if (!state.wheel.spinning) return;
+    const m = new DOMMatrix(getComputedStyle(canvas).transform);
+    const rot = ((Math.atan2(m.b, m.a) * 180) / Math.PI + 360) % 360;
+    const idx = Math.floor(((360 - rot) % 360) / segDeg) % ideas.length;
+    if (idx !== last) {
+      last = idx;
+      ticker.textContent = `${ideaEmoji(ideas[idx])} ${shortTitle(ideas[idx].title)}`;
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 function spin() {
@@ -352,7 +386,7 @@ function spin() {
   render();
   const canvas = $('#wheel');
   canvas.style.transition = 'transform 4.2s cubic-bezier(0.12, 0.8, 0.1, 1)';
-  requestAnimationFrame(() => { canvas.style.transform = `rotate(${final}deg)`; });
+  requestAnimationFrame(() => { canvas.style.transform = `rotate(${final}deg)`; watchTicker(ideas); });
   if (navigator.vibrate) navigator.vibrate(20);
   setTimeout(() => {
     state.wheel.rot = final;
@@ -368,23 +402,21 @@ function spin() {
 function viewDecide() {
   const c = ctx();
   const d = state.decide;
-  const ideas = c.ideas.filter((i) => !i.hidden).sort((a, b) => a.title.localeCompare(b.title));
-  const opts = (sel) => `<option value="">Pick an idea…</option>${ideas.map((i) => `<option value="${i.id}" ${sel === i.id ? 'selected' : ''}>${esc(i.title)}</option>`).join('')}`;
   const nameOf = (v) => c.ideasById[v]?.title || v;
+  const emojiOf = (v) => (c.ideasById[v] ? ideaEmoji(c.ideasById[v]) : '💡');
   const slot = (k, label) => `
     <div class="slot ${d.result === k ? 'win' : ''} ${d.result && d.result !== k ? 'lose' : ''}" id="slot-${k}">
       <div class="slot-label">${label}</div>
-      ${d.running || d.result ? `<div class="slot-title">${esc(nameOf(d[k]))}</div>` : `
-      <select data-act="decideSel" data-k="${k}">${opts(c.ideasById[d[k]] ? d[k] : '')}</select>
-      <input type="text" placeholder="…or type anything" data-k="${k}" class="decide-text" value="${c.ideasById[d[k]] ? '' : esc(d[k])}">`}
+      ${d[k] ? `<div class="slot-pick"><span class="slot-emoji">${emojiOf(d[k])}</span><span class="slot-title">${esc(nameOf(d[k]))}</span>
+        ${d.running || d.result ? '' : `<button class="link small" data-act="decideChoose" data-k="${k}">change</button>`}</div>`
+        : `<button class="slot-empty" data-act="decideChoose" data-k="${k}">＋ Choose an idea</button>`}
     </div>`;
   const ready = d.a && d.b;
   const winner = d.result ? d[d.result] : null;
   return `
     <section class="decide">
-      <h2>Can't choose? 🤔</h2>
-      <p class="muted">Each of you pick one (or let me grab two), then let fate decide.</p>
-      <div class="vs-wrap">${slot('a', 'Idea A')}<div class="vs">VS</div>${slot('b', 'Idea B')}</div>
+      <p class="muted center">Each of you pick one, or let the app grab two. Then let fate decide.</p>
+      <div class="vs-wrap">${slot('a', `${esc(store.me.name)}'s pick`)}<div class="vs">VS</div>${slot('b', `${esc(partnerName())}'s pick`)}</div>
       ${d.result ? `
         <div class="center pop"><div class="big">🎉</div><p><b>${esc(nameOf(winner))}</b> wins!</p>
         <div class="row center">
@@ -1184,6 +1216,21 @@ function gcalLink(d) {
   return `https://calendar.google.com/calendar/render?${p}`;
 }
 
+MODALS.choose = () => {
+  const c = ctx();
+  const k = state.modal.k;
+  const favs = c.ideas.filter((i) => i.fav && !i.hidden);
+  const top = filtered(c).sort((a, b) => b.score - a.score).filter((r) => !r.idea.fav).slice(0, 5).map((r) => r.idea);
+  const all = c.ideas.filter((i) => !i.hidden).sort((a, b) => a.title.localeCompare(b.title));
+  const btn = (i) => `<button class="pick-row" data-act="decideSet" data-k="${k}" data-id="${i.id}">${ideaEmoji(i)} <span>${esc(i.title)}</span><small>${costLabel(i)}</small></button>`;
+  return `<h2>${k === 'a' ? esc(store.me.name) : esc(partnerName())}'s pick</h2>
+    ${favs.length ? `<h3>♥ Favorites</h3>${favs.map(btn).join('')}` : ''}
+    ${top.length ? `<h3>Good fits right now</h3>${top.map(btn).join('')}` : ''}
+    <details><summary class="link">See all ${all.length} ideas</summary>${all.map(btn).join('')}</details>
+    <h3>Something else</h3>
+    <div class="row"><input id="choose-other" placeholder="Type anything" style="flex:1"><button class="btn small" data-act="decideSetOther" data-k="${k}">Use it</button></div>`;
+};
+
 MODALS.settings = () => {
   const c = couple();
   const s = store.status;
@@ -1229,6 +1276,9 @@ MODALS.settings = () => {
 const ACTIONS = {
   tab: (el) => { state.tab = el.dataset.v; localStorage.setItem('dn.tab', state.tab); closeModal(); render(); window.scrollTo(0, 0); },
   closeModal,
+  decideChoose: (el) => openModal('choose', { k: el.dataset.k }),
+  decideSet: (el) => { state.decide[el.dataset.k] = el.dataset.id; state.decide.result = null; closeModal(); render(); },
+  decideSetOther: (el) => { const v = $('#choose-other').value.trim(); if (!v) return; state.decide[el.dataset.k] = v; state.decide.result = null; closeModal(); render(); },
   planPick: (el) => { const m = state.modal; m.draft.ideaId = el.dataset.id; m.draft.title = ''; m.step = 1; renderModal(); },
   planOther: () => { const v = $('#plan-other').value.trim(); if (!v) { toast('Type an idea first'); return; } const m = state.modal; m.draft.ideaId = ''; m.draft.title = v; m.step = 1; renderModal(); },
   planWhen: (el) => { state.modal.draft.when = el.dataset.v; renderModal(); },

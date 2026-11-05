@@ -17,3 +17,4 @@ Each decision: what we chose, and why. Newest at the bottom.
 13. **Find new dates opens Google instead of showing results in the app.** Showing results inside the app needs a paid search API. Opening Google with a smart prefilled search is free.
 14. **Four tabs: Pick, Plans, Memories, Ideas.** Fewer, purpose-based tabs. Spin and This-or-that live inside Pick as alternate ways to choose, so there's one place to decide.
 15. **Planning is step-by-step.** One question per screen, like the check-in, to keep it easy.
+16. **Brand look:** warm rose-to-peach gradients, white rounded cards, soft shadows, emoji as icons. No rainbow, blue, or green accents. The wheel uses brand tints with emoji slices and a live name ticker.
