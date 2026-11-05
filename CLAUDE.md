@@ -7,7 +7,8 @@ It installs to the home screen from the browser on iPhone and Android. No App St
 ## Rules
 - This repo is public. Never commit personal info: real names, home town, addresses, real date
   history, or the couple's own idea list. That data lives only in the database.
-- Never commit to a dirty `main`. Every change goes on a `feat/*` or `fix/*` branch and merges by PR.
+- Never commit to a dirty `main`. Every change goes on a `feat/*` or `fix/*` branch, gets tested, then merges into `main`.
+  No pull requests on this public repo (their required attribution would show the owner's name); merge locally.
 - Memory files: `CLAUDE.md` (rules), `project_state.md` (current state), `project_decisions.md` (choices + why),
   `project_arch.md` (how it fits together), `todo.md` (next tasks). Never create `PROJECT_LOG.md`.
 - Talk to the owner in plain English, no jargon, and end each message with one clear next step.
